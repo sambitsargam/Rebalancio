@@ -1,0 +1,12 @@
+{
+  "targets": {
+    "release": {
+      "binaryFile": "build/rebalancio.wasm",
+      "optimizeLevel": 3,
+      "shrinkLevel": 1
+    }
+  },
+  "entries": [
+    "assembly/contracts/rebalancio.ts"
+  ]
+}

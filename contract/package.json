@@ -1,0 +1,13 @@
+{
+  "name": "rebalancio",
+  "version": "1.0.0",
+  "description": "Self-Rebalancing Index Fund on Massa",
+  "scripts": {
+    "build": "asc assembly/contracts/rebalancio.ts --target release",
+    "test": "asp"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.20.10",
+    "as-pect": "^6.0.0"
+  }
+}
