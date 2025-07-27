@@ -1,1 +1,1 @@
-export const BASE_TOKEN = "TOKEN0";
+export const BASE_TOKEN = "AS12BqZEQ6sByhRLyEuf0YbQmcF2PsDdkNNG1akBJu9XcjZA1eT";

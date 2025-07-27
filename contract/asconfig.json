@@ -8,5 +8,12 @@
   },
   "entries": [
     "assembly/contracts/rebalancio.ts"
-  ]
+  ],
+  "options": {
+    "importMemory": true,
+    "initialMemory": 65536,
+    "maximumMemory": 65536,
+    "sharedMemory": false,
+    "runtime": "stub"
+  }
 }
