@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { getWallets, WalletName } from "@massalabs/wallet-provider";
-import { Provider, Args, OperationStatus, bytesToStr } from "@massalabs/massa-web3";
+import { Provider } from "@massalabs/massa-web3";
 import LandingPage from './components/LandingPage';
 import DAppInterface from './components/DAppInterface';
-
-const CONTRACT_ADDRESS = "AS12BqZEQ6sByhRLyEuf0YbQmcF2PsDdkNNG1akBJu9XcjZA1eT";
+import { CONFIG, ERROR_MESSAGES } from './utils/config';
 
 function App() {
   const [provider, setProvider] = useState<Provider>();
@@ -23,13 +22,13 @@ function App() {
       );
       
       if (!wallet) {
-        throw new Error('No Massa wallet found. Please install MassaStation or another compatible wallet.');
+        throw new Error(ERROR_MESSAGES.WALLET_NOT_FOUND);
       }
 
       const accounts = await wallet.accounts();
 
       if (accounts.length === 0) {
-        throw new Error('No accounts found in wallet. Please create an account first.');
+        throw new Error(ERROR_MESSAGES.NO_ACCOUNTS);
       }
 
       const account = accounts[0];
@@ -65,7 +64,7 @@ function App() {
         <DAppInterface 
           provider={provider}
           userAddress={userAddress}
-          contractAddress={CONTRACT_ADDRESS}
+          contractAddress={CONFIG.CONTRACT_ADDRESS}
           onDisconnect={disconnectWallet}
         />
       )}

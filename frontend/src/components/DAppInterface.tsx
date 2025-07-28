@@ -41,20 +41,41 @@ const DAppInterface: React.FC<DAppInterfaceProps> = ({
     if (!provider) return;
 
     try {
-      // Get user balance from contract
-      const balanceResult = await provider.smartContracts.readSmartContract({
-        func: "getBalance",
+      // Get user deposit amount from contract
+      const userDepositResult = await provider.smartContracts.readSmartContract({
+        func: "getUserDeposit",
         target: contractAddress,
-        parameter: new Args().addString(userAddress).serialize(),
+        parameter: new Args().serialize(), // No parameters needed as it uses Context.caller()
       });
       
-      const balance = parseInt(bytesToStr(balanceResult.value)) / 1000000000;
-      setPortfolioValue(balance.toFixed(2));
-      setTotalDeposited(balance.toFixed(2));
+      const userDeposit = parseFloat(bytesToStr(userDepositResult.value) || "0");
+      setTotalDeposited((userDeposit / 1e9).toFixed(6)); // Convert from smallest unit to MAS
+      
+      // Get total base amount from contract
+      const totalBaseResult = await provider.smartContracts.readSmartContract({
+        func: "getTotalBase",
+        target: contractAddress,
+        parameter: new Args().serialize(),
+      });
+      
+      const totalBase = parseFloat(bytesToStr(totalBaseResult.value) || "0");
+      setPortfolioValue((totalBase / 1e9).toFixed(6)); // Convert from smallest unit to MAS
+
+      // Get index allocations
+      const allocationsResult = await provider.smartContracts.readSmartContract({
+        func: "getIndexAllocations", 
+        target: contractAddress,
+        parameter: new Args().serialize(),
+      });
+      
+      const allocationsStr = bytesToStr(allocationsResult.value);
+      console.log('Index allocations:', allocationsStr);
+      
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
+      setError('Failed to fetch portfolio data: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
-  }, [provider, contractAddress, userAddress]);
+  }, [provider, contractAddress]);
 
   useEffect(() => {
     fetchPortfolioData();
@@ -76,21 +97,22 @@ const DAppInterface: React.FC<DAppInterfaceProps> = ({
     setOperationId(null);
 
     try {
-      let parameter = new Uint8Array();
+      let parameter = new Uint8Array(); // Empty parameter for functions that don't need input
       
-      if (amount && (functionName === 'deposit' || functionName === 'withdraw')) {
-        const amountInSmallestUnit = Math.floor(parseFloat(amount) * 1000000000);
-        parameter = new Args().addU64(BigInt(amountInSmallestUnit)).serialize();
-      }
+      // For deposit and withdraw, we don't pass amount as parameter
+      // The smart contract gets the amount from the token balance or storage
 
       const operation = await provider.smartContracts.callSmartContract({
         parameter,
         func: functionName,
         target: contractAddress,
+        maxGas: 200000000n, // 200M gas units
+        coins: 0n, // No MAS coins sent directly
       });
 
       setOperationId(operation.id);
 
+      // Wait for the operation to be executed
       const status = await operation.waitSpeculativeExecution();
 
       if (status === OperationStatus.SpeculativeSuccess) {
@@ -104,6 +126,8 @@ const DAppInterface: React.FC<DAppInterfaceProps> = ({
         if (functionName === 'rebalance') {
           setLastRebalance('Just now');
         }
+        
+        setError(null);
       } else {
         throw new Error(`Transaction failed with status: ${status}`);
       }
@@ -120,6 +144,10 @@ const DAppInterface: React.FC<DAppInterfaceProps> = ({
       setError('Please enter a valid deposit amount');
       return;
     }
+    
+    // Note: The amount validation is just for UX
+    // The actual deposit amount is determined by the user's token balance
+    // in the smart contract
     executeTransaction('deposit', depositAmount);
   };
 
@@ -128,6 +156,10 @@ const DAppInterface: React.FC<DAppInterfaceProps> = ({
       setError('Please enter a valid withdrawal amount');
       return;
     }
+    
+    // Note: The amount validation is just for UX
+    // The actual withdrawal is based on the user's deposit record
+    // in the smart contract
     executeTransaction('withdraw', withdrawAmount);
   };
 
