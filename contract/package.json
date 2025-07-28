@@ -7,12 +7,11 @@
     "test": "asp"
   },
   "dependencies": {
-    "@massalabs/massa-as-sdk": "^4.0.0",
+    "@massalabs/massa-as-sdk": "^3.0.2",
     "@massalabs/sc-standards": "^1.0.0",
     "as-bignum": "^0.2.0"
   },
   "devDependencies": {
-    "assemblyscript": "^0.20.10",
-    "as-pect": "^6.0.0"
+    "assemblyscript": "^0.27.0"
   }
 }
