@@ -5,6 +5,7 @@ interface WalletStatus {
   extensionInstalled: boolean;
   extensionLoaded: boolean;
   accounts: any[];
+  walletName?: string;
   error?: string;
 }
 
@@ -21,49 +22,68 @@ const WalletStatusChecker: React.FC = () => {
       try {
         setChecking(true);
         
-        // Check if extension is installed
-        const massaProvider = (window as any).massa;
+        // Import getWallets from wallet-provider
+        const { getWallets } = await import('@massalabs/wallet-provider');
         
-        if (!massaProvider) {
-          // Wait a bit for extension to load
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        // Check for available wallets using the official API
+        try {
+          const wallets = await getWallets();
           
-          const massaProviderRetry = (window as any).massa;
-          
-          if (!massaProviderRetry) {
+          if (wallets.length === 0) {
             setStatus({
               extensionInstalled: false,
               extensionLoaded: false,
               accounts: [],
-              error: 'MassaWallet extension not found'
+              error: 'No Massa wallets found. Please install MassaStation or Bearby wallet.'
             });
             return;
           }
-        }
 
-        const provider = (window as any).massa;
-        
-        setStatus(prev => ({
-          ...prev,
-          extensionInstalled: true,
-          extensionLoaded: true
-        }));
-
-        // Try to get accounts
-        try {
-          const accounts = await provider.request({
-            method: 'wallet_accounts'
-          });
-
+          // Found wallet(s)
           setStatus(prev => ({
             ...prev,
-            accounts: accounts || []
+            extensionInstalled: true,
+            extensionLoaded: true,
+            walletName: wallets[0].name()
           }));
+
+          // Try to get accounts from the first wallet
+          try {
+            const wallet = wallets[0];
+            const providers = await wallet.accounts();
+
+            setStatus(prev => ({
+              ...prev,
+              accounts: providers || [],
+              error: providers.length === 0 ? `${wallet.name()} wallet found but no accounts. Please create an account.` : undefined
+            }));
+          } catch (error) {
+            setStatus(prev => ({
+              ...prev,
+              error: `Failed to get accounts: ${error instanceof Error ? error.message : 'Unknown error'}`
+            }));
+          }
+
         } catch (error) {
-          setStatus(prev => ({
-            ...prev,
-            error: `Account access failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }));
+          // Fallback: check for direct wallet provider access
+          const massaProvider = (window as any).massa;
+          const bearbyProvider = (window as any).bearby;
+          
+          if (massaProvider || bearbyProvider) {
+            setStatus({
+              extensionInstalled: true,
+              extensionLoaded: true,
+              accounts: [],
+              error: 'Wallet detected but getWallets() failed. This may be a compatibility issue.'
+            });
+          } else {
+            setStatus({
+              extensionInstalled: false,
+              extensionLoaded: false,
+              accounts: [],
+              error: 'No wallet extensions found'
+            });
+          }
         }
 
       } catch (error) {
@@ -108,7 +128,10 @@ const WalletStatusChecker: React.FC = () => {
         <div className="flex items-center">
           <StatusIcon success={status.extensionInstalled} />
           <span className="ml-2 text-sm">
-            MassaWallet Extension {status.extensionInstalled ? 'Installed' : 'Not Found'}
+            {status.extensionInstalled 
+              ? `${status.walletName || 'Massa'} Wallet Extension Installed` 
+              : 'Massa Wallet Extension Not Found'
+            }
           </span>
         </div>
         
@@ -139,15 +162,19 @@ const WalletStatusChecker: React.FC = () => {
       {!status.extensionInstalled && (
         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
           <p className="text-sm text-yellow-800 mb-2">
-            MassaWallet extension is required to connect.
+            No Massa wallet found. Please install a compatible wallet:
           </p>
+          <div className="space-y-1 text-sm">
+            <div>• <strong>Bearby Wallet</strong> - Most popular Massa wallet</div>
+            <div>• <strong>MassaStation</strong> - Official Massa wallet</div>
+          </div>
           <a 
-            href="https://chrome.google.com/webstore" 
+            href="https://bearby.io" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm"
+            className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm mt-2"
           >
-            Install MassaWallet Extension
+            Install Bearby Wallet
             <ExternalLink className="w-4 h-4 ml-1" />
           </a>
         </div>

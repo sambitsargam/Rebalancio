@@ -12,6 +12,11 @@ const TestInterface: React.FC = () => {
   const [walletAddress, setWalletAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [userDeposit, setUserDeposit] = useState('0');
+  const [totalDeposits, setTotalDeposits] = useState(() => {
+    // Initialize from localStorage or default to '0'
+    return localStorage.getItem('rebalancio_total_deposits') || '0';
+  });
+  const [profitLoss, setProfitLoss] = useState('0'); // Track profit/loss
   const [totalFunds, setTotalFunds] = useState('0');
   const [targetAllocations] = useState<TokenAllocation[]>([
     { token: 'MAS', percentage: 40 },
@@ -31,17 +36,29 @@ const TestInterface: React.FC = () => {
   // Create contract instance
   const [contract] = useState(() => new RebalancioContract());
 
+  const resetDepositTracking = () => {
+    if (confirm('Are you sure you want to reset deposit tracking? This will clear your cumulative deposit history.')) {
+      setTotalDeposits('0');
+      localStorage.removeItem('rebalancio_total_deposits');
+    }
+  };
+
   const loadContractData = useCallback(async () => {
     try {
       const userDep = await contract.getUserBalance();
       const total = await contract.getTotalValueLocked();
       
-      setUserDeposit(parseFloat(userDep).toFixed(2));
+      const currentBalance = parseFloat(userDep);
+      const totalDepositsNum = parseFloat(totalDeposits);
+      const profit = currentBalance - totalDepositsNum;
+      
+      setUserDeposit(currentBalance.toFixed(2));
       setTotalFunds(parseFloat(total).toFixed(2));
+      setProfitLoss(profit.toFixed(2));
     } catch (error) {
       console.error('Error loading contract data:', error);
     }
-  }, [contract]);
+  }, [contract, totalDeposits]);
 
   useEffect(() => {
     const initAndLoad = async () => {
@@ -85,16 +102,18 @@ You can now deposit, withdraw, and rebalance your portfolio.`;
       
       let userFriendlyMessage = '';
       
-      if (errorMsg.includes('extension not detected')) {
-        userFriendlyMessage = `❌ MASSAWALLET NOT FOUND!
+      if (errorMsg.includes('extension not detected') || errorMsg.includes('No Massa wallets found')) {
+        userFriendlyMessage = `❌ MASSA WALLET NOT FOUND!
 
 Please follow these steps:
-1. Install MassaWallet browser extension
+1. Install a Massa wallet extension:
+   • Bearby Wallet (recommended): https://bearby.io
+   • MassaStation: https://station.massa
 2. Create an account in the wallet
 3. Unlock your wallet
 4. Refresh this page and try again
 
-Extension Link: https://chrome.google.com/webstore (search for "MassaWallet")`;
+Note: Make sure you have the latest version of the wallet extension.`;
       } else if (errorMsg.includes('rejected')) {
         userFriendlyMessage = `❌ CONNECTION REJECTED!
 
@@ -162,6 +181,12 @@ Troubleshooting:
 🔄 The portfolio will be automatically rebalanced according to the target allocations.`;
 
       alert(message);
+      
+      // Update cumulative deposits
+      const newTotalDeposits = (parseFloat(totalDeposits) + parseFloat(depositAmount)).toFixed(2);
+      setTotalDeposits(newTotalDeposits);
+      localStorage.setItem('rebalancio_total_deposits', newTotalDeposits);
+      
       setDepositAmount('');
       await loadContractData();
       
@@ -210,6 +235,12 @@ Please check your inputs and try again.`;
 📊 Portfolio allocations have been automatically adjusted.`;
 
       alert(message);
+      
+      // Update cumulative deposits (subtract withdrawal)
+      const newTotalDeposits = Math.max(0, parseFloat(totalDeposits) - parseFloat(withdrawAmount)).toFixed(2);
+      setTotalDeposits(newTotalDeposits);
+      localStorage.setItem('rebalancio_total_deposits', newTotalDeposits);
+      
       setWithdrawAmount('');
       await loadContractData();
       
@@ -321,21 +352,46 @@ Please try again.`;
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Portfolio Overview */}
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-3xl p-8 border border-slate-700">
-            <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center">
-                📊
-              </div>
-              Portfolio Overview
-            </h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center">
+                  📊
+                </div>
+                Portfolio Overview
+              </h2>
+              <button
+                onClick={resetDepositTracking}
+                className="text-xs px-3 py-1 bg-slate-600 hover:bg-slate-500 text-gray-300 rounded-lg transition-colors"
+                title="Reset deposit tracking"
+              >
+                Reset Tracking
+              </button>
+            </div>
             
-            <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-slate-700/50 rounded-2xl p-6">
-                <p className="text-gray-400 text-sm mb-2">Your Deposit</p>
+                <p className="text-gray-400 text-sm mb-2">Current Balance</p>
                 <p className="text-3xl font-bold text-green-400">{userDeposit} MAS</p>
+                <p className="text-xs text-gray-500 mt-1">Available funds</p>
               </div>
               <div className="bg-slate-700/50 rounded-2xl p-6">
-                <p className="text-gray-400 text-sm mb-2">Total Value Locked</p>
-                <p className="text-3xl font-bold text-blue-400">{totalFunds} MAS</p>
+                <p className="text-gray-400 text-sm mb-2">Total Deposits</p>
+                <p className="text-3xl font-bold text-blue-400">{totalDeposits} MAS</p>
+                <p className="text-xs text-gray-500 mt-1">Cumulative deposits</p>
+              </div>
+              <div className="bg-slate-700/50 rounded-2xl p-6">
+                <p className="text-gray-400 text-sm mb-2">Profit/Loss</p>
+                <p className={`text-3xl font-bold ${parseFloat(profitLoss) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {parseFloat(profitLoss) >= 0 ? '+' : ''}{profitLoss} MAS
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {parseFloat(profitLoss) >= 0 ? 'Profit earned' : 'Unrealized loss'}
+                </p>
+              </div>
+              <div className="bg-slate-700/50 rounded-2xl p-6">
+                <p className="text-gray-400 text-sm mb-2">Protocol TVL</p>
+                <p className="text-3xl font-bold text-purple-400">{totalFunds} MAS</p>
+                <p className="text-xs text-gray-500 mt-1">Total value locked</p>
               </div>
             </div>
 
