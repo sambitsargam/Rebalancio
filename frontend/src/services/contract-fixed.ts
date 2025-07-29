@@ -318,8 +318,8 @@ export class RebalancioContract {
       return balance || '0';
       
     } catch (error) {
-      console.warn('Could not fetch user balance, returning default:', error);
-      return (Math.random() * 100).toFixed(2);
+      console.warn('Could not fetch user balance, returning 0:', error);
+      return '0';
     }
   }
 
