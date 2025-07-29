@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import LandingPage from './components/LandingPage';
-import DAppInterface from './components/DAppInterfaceNew';
+import TestInterface from './components/TestInterface';
 
 function App() {
   const [showDApp, setShowDApp] = useState(false);
@@ -10,7 +10,7 @@ function App() {
       {!showDApp ? (
         <LandingPage onEnterApp={() => setShowDApp(true)} />
       ) : (
-        <DAppInterface />
+        <TestInterface />
       )}
     </div>
   );

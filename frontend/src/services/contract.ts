@@ -1,55 +1,60 @@
 import { 
+  JsonRPCClient,
   Account,
-  OperationStatus
+  OperationStatus,
+  Args
 } from '@massalabs/massa-web3';
 
 export class RebalancioContract {
-  private provider: { connected: boolean } | null = null;
+  private client: JsonRPCClient | null = null;
   private account: Account | null = null;
-  private contractAddress: string = '';
+  private contractAddress: string = 'AS12BqZEQ6sByhRLyEuf0YbQmcF2PsDdkNNG1akBJu9XcjZA1eT'; // Real deployed contract
 
   async initialize() {
     try {
-      // Initialize Massa Web3 provider
-      // In production, this would connect to the actual Massa network
-      console.log('Initializing Massa Web3 provider...');
+      console.log('🔗 Connecting to Massa blockchain...');
       
-      // For MVP, we'll use a simulated connection
-      // In production, replace this with actual Web3Account initialization
-      this.provider = { connected: true };
-      console.log('Massa provider initialized successfully');
+      // Initialize real Massa Web3 client for testnet
+      this.client = JsonRPCClient.testnet();
+      
+      console.log('✅ Connected to Massa testnet');
+      console.log(`📡 Connected to Massa RPC endpoint`);
+      
       return true;
     } catch (error) {
-      console.error('Failed to initialize Massa provider:', error);
+      console.error('❌ Failed to connect to Massa network:', error);
       return false;
     }
   }
 
   async connectWallet() {
     try {
-      // In production, this would connect to MassaWallet or other wallet providers
-      // For MVP demo, we simulate wallet connection with realistic flow
+      console.log('🔐 Connecting to Massa wallet...');
       
-      console.log('Attempting to connect to wallet...');
+      if (!this.client) {
+        throw new Error('Client not initialized');
+      }
+
+      // Try to get wallet providers
+      const providers = (window as any).massa;
+      if (!providers) {
+        throw new Error('No Massa wallet extension found. Please install MassaWallet extension.');
+      }
+
+      // Request wallet connection
+      const accounts = await providers.request({ method: 'wallet_accounts' });
+      if (!accounts || accounts.length === 0) {
+        throw new Error('No accounts found in wallet');
+      }
+
+      this.account = new Account(accounts[0].address, providers);
       
-      // Real implementation would use:
-      // const walletProvider = await getWalletProvider();
-      // const accounts = await walletProvider.accounts();
-      // this.account = accounts[0];
+      console.log('✅ Wallet connected successfully');
+      console.log(`👤 Account: ${accounts[0].address}`);
       
-      // For MVP, simulate a connected wallet with a realistic Massa address
-      const simulatedAddress = 'AU12CzXDvkT4mZp7wAGMCepKZQFGHNhUYf5FhG5CRBf9';
-      
-      // Simulate wallet connection delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Wallet connected successfully:', simulatedAddress);
-      console.log('Note: This is a simulated connection for MVP demo');
-      console.log('In production, this would connect to the actual Massa wallet');
-      
-      return simulatedAddress;
+      return accounts[0].address;
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
+      console.error('❌ Failed to connect wallet:', error);
       throw new Error(`Wallet connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -59,71 +64,82 @@ export class RebalancioContract {
   }
 
   async deposit(amount: string) {
-    if (!this.provider || !this.contractAddress) {
-      throw new Error('Contract not properly initialized');
+    if (!this.client || !this.account) {
+      throw new Error('Client or account not initialized. Please connect wallet first.');
     }
 
     try {
-      console.log(`🔄 Starting deposit transaction...`);
+      console.log(`🔄 Starting real deposit transaction...`);
       console.log(`📊 Amount: ${amount} MAS`);
-      console.log(`📍 Contract Address: ${this.contractAddress}`);
-      console.log(`💰 Current Gas Price: ~0.001 MAS`);
+      console.log(`📍 Contract: ${this.contractAddress}`);
       
-      // Simulate real blockchain interaction steps
-      console.log(`⏳ Step 1/4: Validating transaction parameters...`);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Convert amount to smallest unit (nanoMAS)
+      const amountInNanoMAS = BigInt(parseFloat(amount) * 1000000000);
       
-      console.log(`⏳ Step 2/4: Creating smart contract call...`);
-      await new Promise(resolve => setTimeout(resolve, 800));
+      console.log(`⏳ Step 1/4: Preparing smart contract call...`);
       
-      console.log(`⏳ Step 3/4: Broadcasting to Massa network...`);
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      // Prepare function arguments
+      const args = new Args().addString(amount);
+      
+      console.log(`⏳ Step 2/4: Creating transaction...`);
+      
+      // Create smart contract call
+      const operation = await this.account.callSmartContract({
+        targetAddress: this.contractAddress,
+        functionName: 'deposit',
+        parameter: args.serialize(),
+        maxGas: BigInt(3000000),
+        coins: amountInNanoMAS
+      });
+
+      console.log(`⏳ Step 3/4: Broadcasting to network...`);
+      console.log(`📄 Operation ID: ${operation[0]}`);
       
       console.log(`⏳ Step 4/4: Waiting for confirmation...`);
-      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Real implementation would look like:
-      // const operation = await this.smartContractClient.callSmartContract({
-      //   targetAddress: this.contractAddress,
-      //   functionName: 'deposit',
-      //   parameter: new Args().addString(amount).serialize(),
-      //   maxGas: BigInt(3000000),
-      //   coins: BigInt(parseFloat(amount) * 1000000) // Convert to nanoMAS
-      // });
+      // Wait for operation to be included in a block
+      let status = await this.client.getOperationStatus(operation[0]);
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds timeout
       
-      const operationId = 'OP' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-      const blockHeight = Math.floor(Math.random() * 100000) + 2500000;
-      const gasUsed = Math.floor(Math.random() * 50000) + 75000;
-      const transactionHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      while (status === OperationStatus.PENDING && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        status = await this.client.getOperationStatus(operation[0]);
+        attempts++;
+      }
       
-      const operation = {
-        id: operationId,
-        status: OperationStatus.Success,
-        transactionHash,
-        blockHeight,
-        gasUsed,
-        timestamp: Date.now(),
-        amount: parseFloat(amount),
-        fee: gasUsed * 0.000001, // Simulate fee calculation
-        confirmations: 1
-      };
+      if (status === OperationStatus.SUCCESS) {
+        console.log(`✅ Transaction confirmed!`);
+        
+        // Get transaction details
+        const operationInfo = await this.client.getOperations([operation[0]]);
+        const txInfo = operationInfo[0];
+        
+        const result = {
+          id: operation[0],
+          status: OperationStatus.SUCCESS,
+          transactionHash: operation[0], // Operation ID is the transaction hash
+          blockHeight: txInfo?.in_blocks?.[0]?.block_id || 'Pending',
+          gasUsed: Number(txInfo?.gas_used || 0),
+          timestamp: Date.now(),
+          amount: parseFloat(amount),
+          fee: Number(txInfo?.fee || 0) / 1000000000, // Convert from nanoMAS
+          confirmations: 1
+        };
 
-      console.log(`✅ Transaction successful!`);
-      console.log(`📄 Transaction Hash: ${operation.transactionHash}`);
-      console.log(`🔗 Block Height: ${operation.blockHeight}`);
-      console.log(`⛽ Gas Used: ${operation.gasUsed.toLocaleString()}`);
-      console.log(`💸 Transaction Fee: ${operation.fee.toFixed(6)} MAS`);
-      console.log(`🕐 Timestamp: ${new Date(operation.timestamp).toLocaleString()}`);
+        console.log(`📄 Transaction Hash: ${result.transactionHash}`);
+        console.log(`🔗 Block: ${result.blockHeight}`);
+        console.log(`⛽ Gas Used: ${result.gasUsed.toLocaleString()}`);
+        console.log(`💸 Fee: ${result.fee.toFixed(6)} MAS`);
+        
+        return result;
+      } else {
+        throw new Error(`Transaction failed with status: ${status}`);
+      }
       
-      // Update local state to simulate contract state change
-      const currentDeposit = localStorage.getItem('userDeposit') || '0';
-      const newDeposit = (parseFloat(currentDeposit) + parseFloat(amount)).toString();
-      localStorage.setItem('userDeposit', newDeposit);
-      
-      return operation;
     } catch (error) {
       console.error('❌ Deposit transaction failed:', error);
-      throw new Error(`Deposit operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Deposit failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

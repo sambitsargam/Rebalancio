@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { contractService } from '../services/contract';
+import { RebalancioContract } from '../services/contract-real';
 
 interface TokenAllocation {
   token: string;

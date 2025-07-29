@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Massa Wallet Debug</title>
+</head>
+<body>
+    <h1>Massa Wallet Debug Tool</h1>
+    <div id="status"></div>
+    <button onclick="checkWallet()">Check Wallet</button>
+    <button onclick="connectWallet()">Connect Wallet</button>
+    
+    <script>
+        function checkWallet() {
+            const status = document.getElementById('status');
+            
+            console.log('Checking for Massa wallet...');
+            
+            if (typeof window.massa !== 'undefined') {
+                status.innerHTML = `
+                    <div style="color: green;">
+                        ✅ MassaWallet extension detected!<br>
+                        Provider: ${typeof window.massa}<br>
+                        Available methods: ${Object.keys(window.massa || {}).join(', ')}
+                    </div>
+                `;
+            } else {
+                status.innerHTML = `
+                    <div style="color: red;">
+                        ❌ MassaWallet extension NOT found!<br>
+                        Please install MassaWallet browser extension.<br>
+                        Available providers: ${Object.keys(window).filter(k => k.includes('massa') || k.includes('wallet')).join(', ') || 'None'}
+                    </div>
+                `;
+            }
+        }
+        
+        async function connectWallet() {
+            const status = document.getElementById('status');
+            
+            try {
+                if (!window.massa) {
+                    throw new Error('MassaWallet extension not found');
+                }
+                
+                console.log('Requesting wallet accounts...');
+                const accounts = await window.massa.request({
+                    method: 'wallet_accounts'
+                });
+                
+                console.log('Accounts:', accounts);
+                
+                if (!accounts || accounts.length === 0) {
+                    status.innerHTML += '<div style="color: orange;">⚠️ No accounts found in wallet</div>';
+                } else {
+                    status.innerHTML += `<div style="color: green;">✅ Connected! Address: ${accounts[0].address}</div>`;
+                }
+                
+            } catch (error) {
+                console.error('Connection error:', error);
+                status.innerHTML += `<div style="color: red;">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        // Auto-check on load
+        window.onload = checkWallet;
+    </script>
+</body>
+</html>
